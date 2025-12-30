@@ -12,6 +12,9 @@ from youtube_transcript_api._errors import (
     NoTranscriptFound,
     VideoUnavailable
 )
+
+# Initialize transcript API
+transcript_api = YouTubeTranscriptApi()
 from groq import Groq
 from dotenv import load_dotenv
 import requests
@@ -61,9 +64,9 @@ def get_video_info(video_id: str) -> dict | None:
 
 def get_transcript(video_id: str) -> str:
     """Fetch transcript for a YouTube video."""
-    transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+    transcript = transcript_api.fetch(video_id)
     # Combine all transcript segments into a single string
-    full_transcript = " ".join([entry['text'] for entry in transcript_list])
+    full_transcript = " ".join([snippet.text for snippet in transcript])
     return full_transcript
 
 
@@ -99,7 +102,7 @@ Provide a clear, well-organized summary that captures the essence of the video."
                 "content": prompt
             }
         ],
-        model="llama-3.1-70b-versatile",
+        model="llama-3.3-70b-versatile",
         temperature=0.3,
         max_tokens=1500
     )
