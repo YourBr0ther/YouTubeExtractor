@@ -9,9 +9,9 @@ A sleek YouTube transcript extractor with AI-powered summarization.
 ## Features
 
 - **Extract Transcripts** - Fetch transcripts from any YouTube video with captions
-- **AI Summarization** - Get intelligent summaries powered by Groq's LLaMA 3.1 70B
+- **AI Summarization** - Get intelligent summaries powered by Groq's LLaMA 3.3 70B
+- **Download & Copy** - One-click download or copy for transcripts and summaries
 - **Modern UI** - Clean, responsive dark theme interface
-- **Copy to Clipboard** - One-click copying for transcripts and summaries
 - **No YouTube API Key Required** - Uses `youtube-transcript-api` module
 
 ## Quick Start
@@ -59,13 +59,13 @@ A sleek YouTube transcript extractor with AI-powered summarization.
 1. Paste a YouTube URL into the input field
 2. Click "Extract" to fetch the transcript
 3. View the full transcript and AI-generated summary side by side
-4. Use the copy buttons to copy content to your clipboard
+4. Download or copy the content using the buttons provided
 
 ## Tech Stack
 
 - **Backend**: Flask (Python)
 - **Transcript Fetching**: youtube-transcript-api
-- **AI Summarization**: Groq (LLaMA 3.1 70B)
+- **AI Summarization**: Groq (LLaMA 3.3 70B)
 - **Frontend**: HTML, Tailwind CSS, Vanilla JS
 - **Fonts**: Instrument Serif, Sora
 
