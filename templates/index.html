@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcriptor — YouTube Transcript Extractor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        obsidian: '#0a0a0b',
+                        charcoal: '#141416',
+                        slate: '#1e1e22',
+                        smoke: '#2a2a30',
+                        ash: '#8a8a96',
+                        cream: '#f5f5f0',
+                        amber: '#f59e0b',
+                        amberGlow: '#fbbf24',
+                        cinnabar: '#ff4444',
+                    },
+                    fontFamily: {
+                        display: ['Instrument Serif', 'Georgia', 'serif'],
+                        body: ['Sora', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.6s ease-out forwards',
+                        'slide-up': 'slideUp 0.5s ease-out forwards',
+                        'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
+                        'shimmer': 'shimmer 2s linear infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.2); }
+            50% { box-shadow: 0 0 40px rgba(245, 158, 11, 0.4); }
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        body {
+            background-color: #0a0a0b;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.08), transparent),
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            background-blend-mode: overlay;
+        }
+
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.03;
+            z-index: 1000;
+        }
+
+        .input-glow:focus {
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3), 0 0 40px rgba(245, 158, 11, 0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .card-glass {
+            background: linear-gradient(135deg, rgba(30, 30, 34, 0.8) 0%, rgba(20, 20, 22, 0.9) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .transcript-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .transcript-container::-webkit-scrollbar-track {
+            background: #1e1e22;
+            border-radius: 3px;
+        }
+
+        .transcript-container::-webkit-scrollbar-thumb {
+            background: #3a3a44;
+            border-radius: 3px;
+        }
+
+        .transcript-container::-webkit-scrollbar-thumb:hover {
+            background: #4a4a54;
+        }
+
+        .loading-bar {
+            background: linear-gradient(90deg, transparent, #f59e0b, transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s linear infinite;
+        }
+
+        .youtube-icon {
+            filter: drop-shadow(0 0 10px rgba(255, 68, 68, 0.3));
+        }
+
+        .stagger-1 { animation-delay: 0.1s; }
+        .stagger-2 { animation-delay: 0.2s; }
+        .stagger-3 { animation-delay: 0.3s; }
+        .stagger-4 { animation-delay: 0.4s; }
+
+        .summary-text {
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body class="min-h-screen font-body text-cream antialiased">
+    <div class="noise-overlay"></div>
+
+    <div class="relative z-10 min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="py-8 px-6 animate-fade-in">
+            <div class="max-w-6xl mx-auto flex items-center justify-center gap-4">
+                <svg class="w-10 h-10 text-cinnabar youtube-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+                <h1 class="font-display text-4xl md:text-5xl italic tracking-tight">
+                    Transcriptor
+                </h1>
+            </div>
+            <p class="text-center text-ash text-sm mt-3 font-light tracking-wide animate-fade-in stagger-1" style="opacity: 0;">
+                Extract & summarize YouTube transcripts with AI
+            </p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 px-6 pb-12">
+            <div class="max-w-6xl mx-auto">
+                <!-- Input Section -->
+                <div class="max-w-2xl mx-auto mb-12 animate-slide-up stagger-2" style="opacity: 0;">
+                    <form id="transcriptForm" class="relative">
+                        <div class="relative">
+                            <input
+                                type="text"
+                                id="youtubeUrl"
+                                placeholder="Paste YouTube URL here..."
+                                class="w-full bg-charcoal border border-smoke rounded-2xl px-6 py-5 pr-40 text-cream placeholder-ash/50 font-light text-lg input-glow transition-all duration-300 focus:outline-none focus:border-amber/30"
+                                required
+                            >
+                            <button
+                                type="submit"
+                                id="extractBtn"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 btn-primary text-obsidian font-medium px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 active:scale-95"
+                            >
+                                <span id="btnText">Extract</span>
+                                <svg id="btnSpinner" class="hidden w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loadingState" class="hidden max-w-2xl mx-auto mb-8">
+                    <div class="h-1 w-full bg-smoke rounded-full overflow-hidden">
+                        <div class="loading-bar h-full w-full"></div>
+                    </div>
+                    <p id="loadingText" class="text-center text-ash text-sm mt-4 font-light">Fetching transcript...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="errorState" class="hidden max-w-2xl mx-auto mb-8">
+                    <div class="card-glass rounded-2xl p-6 border-cinnabar/30">
+                        <div class="flex items-center gap-3 text-cinnabar">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span id="errorMessage" class="font-medium"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Info -->
+                <div id="videoInfo" class="hidden max-w-2xl mx-auto mb-8 animate-fade-in">
+                    <div class="card-glass rounded-2xl p-6">
+                        <div class="flex gap-4 items-start">
+                            <img id="videoThumbnail" src="" alt="" class="w-32 h-20 object-cover rounded-lg">
+                            <div class="flex-1 min-w-0">
+                                <h3 id="videoTitle" class="font-display text-xl text-cream truncate"></h3>
+                                <p id="videoChannel" class="text-ash text-sm mt-1"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Grid -->
+                <div id="resultsGrid" class="hidden grid lg:grid-cols-2 gap-6 animate-slide-up">
+                    <!-- Transcript Card -->
+                    <div class="card-glass rounded-2xl overflow-hidden">
+                        <div class="flex items-center justify-between px-6 py-4 border-b border-smoke">
+                            <h2 class="font-display text-2xl italic text-cream">Transcript</h2>
+                            <button
+                                id="copyTranscript"
+                                class="flex items-center gap-2 text-ash hover:text-amber transition-colors duration-200 text-sm font-medium"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                                <span id="copyBtnText">Copy</span>
+                            </button>
+                        </div>
+                        <div class="p-6 transcript-container max-h-[500px] overflow-y-auto">
+                            <p id="transcriptText" class="text-ash font-light leading-relaxed whitespace-pre-wrap"></p>
+                        </div>
+                    </div>
+
+                    <!-- Summary Card -->
+                    <div class="card-glass rounded-2xl overflow-hidden">
+                        <div class="flex items-center justify-between px-6 py-4 border-b border-smoke">
+                            <div class="flex items-center gap-3">
+                                <h2 class="font-display text-2xl italic text-cream">AI Summary</h2>
+                                <span class="text-xs font-medium text-amber bg-amber/10 px-2 py-1 rounded-full">Groq</span>
+                            </div>
+                            <button
+                                id="copySummary"
+                                class="flex items-center gap-2 text-ash hover:text-amber transition-colors duration-200 text-sm font-medium"
+                            >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                                <span id="copySummaryText">Copy</span>
+                            </button>
+                        </div>
+                        <div class="p-6 transcript-container max-h-[500px] overflow-y-auto">
+                            <div id="summaryLoading" class="hidden space-y-3">
+                                <div class="h-4 bg-smoke rounded animate-pulse w-full"></div>
+                                <div class="h-4 bg-smoke rounded animate-pulse w-5/6"></div>
+                                <div class="h-4 bg-smoke rounded animate-pulse w-4/6"></div>
+                            </div>
+                            <p id="summaryText" class="text-ash font-light leading-relaxed summary-text"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="py-6 px-6 border-t border-smoke/50 animate-fade-in stagger-4" style="opacity: 0;">
+            <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-ash text-sm">
+                <p class="font-light">
+                    Built with <span class="text-cinnabar">♥</span> by <span class="text-cream font-medium">YourBr0ther</span>
+                </p>
+                <div class="flex items-center gap-6">
+                    <span class="font-light">Powered by</span>
+                    <div class="flex items-center gap-4">
+                        <span class="text-cream font-medium">youtube-transcript-api</span>
+                        <span class="text-smoke">•</span>
+                        <span class="text-amber font-medium">Groq</span>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const form = document.getElementById('transcriptForm');
+        const urlInput = document.getElementById('youtubeUrl');
+        const extractBtn = document.getElementById('extractBtn');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        const loadingState = document.getElementById('loadingState');
+        const loadingText = document.getElementById('loadingText');
+        const errorState = document.getElementById('errorState');
+        const errorMessage = document.getElementById('errorMessage');
+        const videoInfo = document.getElementById('videoInfo');
+        const resultsGrid = document.getElementById('resultsGrid');
+        const transcriptText = document.getElementById('transcriptText');
+        const summaryText = document.getElementById('summaryText');
+        const summaryLoading = document.getElementById('summaryLoading');
+
+        function setLoading(isLoading, text = 'Fetching transcript...') {
+            if (isLoading) {
+                btnText.classList.add('hidden');
+                btnSpinner.classList.remove('hidden');
+                extractBtn.disabled = true;
+                loadingState.classList.remove('hidden');
+                loadingText.textContent = text;
+                errorState.classList.add('hidden');
+            } else {
+                btnText.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+                extractBtn.disabled = false;
+                loadingState.classList.add('hidden');
+            }
+        }
+
+        function showError(message) {
+            errorState.classList.remove('hidden');
+            errorMessage.textContent = message;
+            resultsGrid.classList.add('hidden');
+            videoInfo.classList.add('hidden');
+        }
+
+        function extractVideoId(url) {
+            const patterns = [
+                /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                /youtube\.com\/shorts\/([^&\n?#]+)/
+            ];
+            for (const pattern of patterns) {
+                const match = url.match(pattern);
+                if (match) return match[1];
+            }
+            return null;
+        }
+
+        async function copyToClipboard(text, btnId, textId) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const textEl = document.getElementById(textId);
+                textEl.textContent = 'Copied!';
+                setTimeout(() => textEl.textContent = 'Copy', 2000);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        }
+
+        document.getElementById('copyTranscript').addEventListener('click', () => {
+            copyToClipboard(transcriptText.textContent, 'copyTranscript', 'copyBtnText');
+        });
+
+        document.getElementById('copySummary').addEventListener('click', () => {
+            copyToClipboard(summaryText.textContent, 'copySummary', 'copySummaryText');
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = urlInput.value.trim();
+
+            if (!url) return;
+
+            const videoId = extractVideoId(url);
+            if (!videoId) {
+                showError('Invalid YouTube URL. Please enter a valid YouTube video link.');
+                return;
+            }
+
+            setLoading(true, 'Fetching transcript...');
+            errorState.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/transcript', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to fetch transcript');
+                }
+
+                // Show video info
+                if (data.video_info) {
+                    document.getElementById('videoThumbnail').src = data.video_info.thumbnail;
+                    document.getElementById('videoTitle').textContent = data.video_info.title;
+                    document.getElementById('videoChannel').textContent = data.video_info.channel;
+                    videoInfo.classList.remove('hidden');
+                }
+
+                // Show transcript
+                transcriptText.textContent = data.transcript;
+                resultsGrid.classList.remove('hidden');
+
+                // Start summary loading
+                setLoading(true, 'Generating AI summary...');
+                summaryLoading.classList.remove('hidden');
+                summaryText.textContent = '';
+
+                // Fetch summary
+                const summaryResponse = await fetch('/api/summarize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transcript: data.transcript, title: data.video_info?.title || '' })
+                });
+
+                const summaryData = await summaryResponse.json();
+                summaryLoading.classList.add('hidden');
+
+                if (summaryResponse.ok) {
+                    summaryText.textContent = summaryData.summary;
+                } else {
+                    summaryText.textContent = 'Failed to generate summary: ' + (summaryData.error || 'Unknown error');
+                }
+
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                setLoading(false);
+            }
+        });
+    </script>
+</body>
+</html>
